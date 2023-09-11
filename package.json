@@ -1,6 +1,6 @@
 {
   "name": "@jupyterlab/latex",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "description": "JupyterLab extension for running LaTeX",
   "keywords": [
     "jupyter",
