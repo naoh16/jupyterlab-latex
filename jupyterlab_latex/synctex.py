@@ -17,7 +17,7 @@ class LatexSynctexHandler(APIHandler):
     """
 
     def initialize(self, notebook_dir):
-        self.notebook_dir = notebook_dir
+        self.notebook_dir = os.path.expanduser(notebook_dir)
 
 
     def build_synctex_cmd(self, base_name, ext):

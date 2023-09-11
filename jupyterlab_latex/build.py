@@ -65,7 +65,7 @@ class LatexBuildHandler(APIHandler):
     """
 
     def initialize(self, notebook_dir):
-        self.notebook_dir = notebook_dir
+        self.notebook_dir = os.path.expanduser(notebook_dir)
 
 
     def build_tex_cmd_sequence(self, tex_base_name, run_bibtex=False):
@@ -180,7 +180,6 @@ class LatexBuildHandler(APIHandler):
         """
         # Parse the path into the base name and extension of the file
         tex_file_path = os.path.join(self.notebook_dir, path.strip('/'))
-        tex_file_path = os.path.expanduser(tex_file_path)
         tex_base_name, ext = os.path.splitext(os.path.basename(tex_file_path))
         c = LatexConfig(config=self.config)
 
