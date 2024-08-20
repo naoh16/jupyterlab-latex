@@ -122,5 +122,6 @@
     },
     "outputDir": "jupyterlab_latex/labextension"
   },
-  "styleModule": "style/index.js"
+  "styleModule": "style/index.js",
+  "packageManager": "yarn@3.8.4"
 }
