@@ -5,13 +5,13 @@ import {
   ILabShell,
   ILayoutRestorer,
   JupyterFrontEnd,
-  JupyterFrontEndPlugin
+  JupyterFrontEndPlugin,
 } from '@jupyterlab/application';
 
 import {
   IWidgetTracker,
   WidgetTracker,
-  showErrorMessage
+  showErrorMessage,
 } from '@jupyterlab/apputils';
 
 import { CodeEditor } from '@jupyterlab/codeeditor';
@@ -51,6 +51,11 @@ import { IMainMenu } from '@jupyterlab/mainmenu';
 import latexIconStr from '../style/latex.svg';
 
 import '../style/index.css';
+
+import { NotebookPanel, INotebookModel } from '@jupyterlab/notebook';
+
+import { ToolbarButton } from '@jupyterlab/apputils';
+import { IDisposable, DisposableDelegate } from '@lumino/disposable';
 
 /**
  * A class that tracks editor widgets.
@@ -116,11 +121,11 @@ const latexPlugin: JupyterFrontEndPlugin<void> = {
     ILayoutRestorer,
     IPDFJSTracker,
     ISettingRegistry,
-    IStateDB
+    IStateDB,
   ],
   optional: [ILauncher, IMainMenu, ICommandPalette],
   activate: activateLatexPlugin,
-  autoStart: true
+  autoStart: true,
 };
 
 /**
@@ -140,14 +145,16 @@ function latexBuildRequest(
   let fullUrl = URLExt.join(settings.baseUrl, 'latex', 'build', path);
   fullUrl += `?synctex=${synctex ? 1 : 0}`;
 
-  return ServerConnection.makeRequest(fullUrl, {}, settings).then(response => {
-    if (response.status !== 200) {
-      return response.text().then(data => {
-        throw new ServerConnection.ResponseError(response, data);
-      });
+  return ServerConnection.makeRequest(fullUrl, {}, settings).then(
+    (response) => {
+      if (response.status !== 200) {
+        return response.text().then((data) => {
+          throw new ServerConnection.ResponseError(response, data);
+        });
+      }
+      return response.text();
     }
-    return response.text();
-  });
+  );
 }
 
 /**
@@ -167,16 +174,16 @@ function synctexEditRequest(
   let url = URLExt.join(settings.baseUrl, 'latex', 'synctex', path);
   url += `?page=${pos.page}&x=${pos.x}&y=${pos.y}`;
 
-  return ServerConnection.makeRequest(url, {}, settings).then(response => {
+  return ServerConnection.makeRequest(url, {}, settings).then((response) => {
     if (response.status !== 200) {
-      return response.text().then(data => {
+      return response.text().then((data) => {
         throw new ServerConnection.ResponseError(response, data);
       });
     }
-    return response.json().then(json => {
+    return response.json().then((json) => {
       return {
         line: parseInt(json.line, 10),
-        column: parseInt(json.column, 10)
+        column: parseInt(json.column, 10),
       } as ISynctexViewOptions;
     });
   });
@@ -199,17 +206,17 @@ function synctexViewRequest(
   let url = URLExt.join(settings.baseUrl, 'latex', 'synctex', path);
   url += `?line=${pos.line}&column=${pos.column}`;
 
-  return ServerConnection.makeRequest(url, {}, settings).then(response => {
+  return ServerConnection.makeRequest(url, {}, settings).then((response) => {
     if (response.status !== 200) {
-      return response.text().then(data => {
+      return response.text().then((data) => {
         throw new ServerConnection.ResponseError(response, data);
       });
     }
-    return response.json().then(json => {
+    return response.json().then((json) => {
       return {
         page: parseInt(json.page, 10),
         x: parseFloat(json.x),
-        y: parseFloat(json.y)
+        y: parseFloat(json.y),
       } as ISynctexEditOptions;
     });
   });
@@ -237,7 +244,7 @@ function activateLatexPlugin(
 
   const icon = new LabIcon({
     name: 'launcher:latex-icon',
-    svgstr: latexIconStr
+    svgstr: latexIconStr,
   });
 
   let synctex = true;
@@ -276,7 +283,7 @@ function activateLatexPlugin(
       let pdfWidget = manager.findWidget(pdfFilePath);
       if (!pdfWidget) {
         pdfWidget = manager.openOrReveal(pdfFilePath, 'PDFJS', undefined, {
-          mode: 'split-right'
+          mode: 'split-right',
         });
       }
       if (!pdfWidget) {
@@ -296,9 +303,9 @@ function activateLatexPlugin(
         (view: ISynctexViewOptions) => {
           // SyncTex line is one-based, so subtract 1.
           const cursor = { line: view.line - 1, column: 0 };
-          (widget as IDocumentWidget<
-            FileEditor
-          >).content.editor.setCursorPosition(cursor);
+          (
+            widget as IDocumentWidget<FileEditor>
+          ).content.editor.setCursorPosition(cursor);
         }
       );
     };
@@ -311,7 +318,7 @@ function activateLatexPlugin(
             'installed or enabled. ' +
             'Please, run "pip install -U jupyterlab_latex." ' +
             'If that does not work, try "jupyter serverextension ' +
-            'enable --sys-prefix jupyterlab_latex".'
+            'enable --sys-prefix jupyterlab_latex".',
         };
         showErrorMessage('Server Extension Error', noServerExt);
         return;
@@ -325,7 +332,7 @@ function activateLatexPlugin(
       // Add the error panel to the main area.
       shell.add(errorPanel, 'main', {
         ref: widget.id,
-        mode: 'split-bottom'
+        mode: 'split-bottom',
       });
       errorPanel.text = err.message;
     };
@@ -345,7 +352,7 @@ function activateLatexPlugin(
           }
           pending = false;
         })
-        .catch(err => {
+        .catch((err) => {
           // If there was an error, show the error panel
           // with the error log.
           if (!errorPanel) {
@@ -386,12 +393,39 @@ function activateLatexPlugin(
     state.save(id, { paths: Array.from(Private.previews) });
   };
 
+  class EditorButtonExtension
+    implements DocumentRegistry.IWidgetExtension<NotebookPanel, INotebookModel>
+  {
+    createNew(
+      panel: NotebookPanel,
+      context: DocumentRegistry.IContext<INotebookModel>
+    ): IDisposable {
+      const execOpenLataxPreview = () => {
+        commands.execute(CommandIDs.openLatexPreview);
+      };
+      const button = new ToolbarButton({
+        className: 'run-latexPreview-command',
+        label: 'Preview',
+        onClick: execOpenLataxPreview,
+        tooltip: 'Click to preview your LaTeX document',
+      });
+      if (context.path.endsWith('.tex')) {
+        panel.toolbar.insertItem(10, 'Preview', button);
+      }
+      return new DisposableDelegate(() => {
+        button.dispose();
+      });
+    }
+  }
+
+  app.docRegistry.addWidgetExtension('Editor', new EditorButtonExtension());
+
   // If there are any active previews in the statedb,
   // activate them upon initialization.
   Promise.all([state.fetch(id), app.restored]).then(([args]) => {
     let paths =
       (args && ((args as ReadonlyJSONObject)['paths'] as string[])) || [];
-    paths.forEach(path => {
+    paths.forEach((path) => {
       let widget = manager.findWidget(path);
       if (widget) {
         openPreview(widget);
@@ -442,16 +476,16 @@ function activateLatexPlugin(
         (widget && PathExt.extname(widget.context.path) === '.tex') || false
       );
     },
-    label: 'Show LaTeX Preview'
+    label: 'Show LaTeX Preview',
   });
 
   const command = CommandIDs.createNew;
   const command_latex_preview = CommandIDs.openLatexPreview;
   commands.addCommand(command, {
-    label: args => (args['isPalette'] ? 'New LaTeX File' : 'LaTeX File'),
+    label: (args) => (args['isPalette'] ? 'New LaTeX File' : 'LaTeX File'),
     caption: 'Create a new LaTeX file',
-    icon: args => (args['isPalette'] ? undefined : icon),
-    execute: async args => {
+    icon: (args) => (args['isPalette'] ? undefined : icon),
+    execute: async (args) => {
       // Get the directory in which the LaTeX file must be created;
       // otherwise take the current filebrowser directory
       const cwd = args['cwd'] || browser.model.path;
@@ -460,20 +494,20 @@ function activateLatexPlugin(
       const model = await commands.execute('docmanager:new-untitled', {
         path: cwd,
         type: 'file',
-        ext: 'tex'
+        ext: 'tex',
       });
 
       // Open the newly created file with the 'Editor'
       return commands.execute('docmanager:open', {
         path: model.path,
-        factory: FACTORY_EDITOR
+        factory: FACTORY_EDITOR,
       });
-    }
+    },
   });
 
   app.contextMenu.addItem({
     command: command_latex_preview,
-    selector: '.jp-FileEditor'
+    selector: '.jp-FileEditor',
   });
 
   // Add the command to the launcher
@@ -481,7 +515,7 @@ function activateLatexPlugin(
     launcher.add({
       command,
       category: LAUNCHER_CATEGORY,
-      rank: 1
+      rank: 1,
     });
   }
 
@@ -490,7 +524,7 @@ function activateLatexPlugin(
     palette.addItem({
       command: command,
       args: { isPalette: true },
-      category: PALETTE_CATEGORY
+      category: PALETTE_CATEGORY,
     });
   }
 
@@ -538,7 +572,7 @@ function addSynctexCommands(
             const dirName = PathExt.dirname(widget.context.path);
             const texFilePath = PathExt.join(dirName, baseName + '.tex');
             const editorWidget = editorTracker.find(
-              editor => editor.context.path === texFilePath
+              (editor) => editor.context.path === texFilePath
             );
             if (!editorWidget) {
               return;
@@ -559,7 +593,7 @@ function addSynctexCommands(
         const texFilePath = PathExt.join(dirName, baseName + '.tex');
         return Private.previews.has(texFilePath);
       },
-      label: 'Scroll Editor to Page'
+      label: 'Scroll Editor to Page',
     })
   );
 
@@ -589,7 +623,7 @@ function addSynctexCommands(
             const dirName = PathExt.dirname(widget.context.path);
             const pdfFilePath = PathExt.join(dirName, baseName + '.pdf');
             const pdfWidget = pdfTracker.find(
-              pdf => pdf.context.path === pdfFilePath
+              (pdf) => pdf.context.path === pdfFilePath
             );
             if (!pdfWidget) {
               return;
@@ -605,7 +639,7 @@ function addSynctexCommands(
         let widget = editorTracker.currentWidget;
         return !!widget && Private.previews.has(widget.context.path);
       },
-      label: 'Scroll PDF to Cursor'
+      label: 'Scroll PDF to Cursor',
     })
   );
 
@@ -613,13 +647,13 @@ function addSynctexCommands(
   disposables.add(
     app.contextMenu.addItem({
       command: CommandIDs.synctexView,
-      selector: '.jp-FileEditor'
+      selector: '.jp-FileEditor',
     })
   );
   disposables.add(
     app.contextMenu.addItem({
       command: CommandIDs.synctexEdit,
-      selector: '.jp-PDFJSContainer'
+      selector: '.jp-PDFJSContainer',
     })
   );
 
@@ -628,14 +662,14 @@ function addSynctexCommands(
     app.commands.addKeyBinding({
       selector: '.jp-FileEditor',
       keys: ['Accel Shift X'],
-      command: CommandIDs.synctexView
+      command: CommandIDs.synctexView,
     })
   );
   disposables.add(
     app.commands.addKeyBinding({
       selector: '.jp-PDFJSContainer',
       keys: ['Accel Shift X'],
-      command: CommandIDs.synctexEdit
+      command: CommandIDs.synctexEdit,
     })
   );
 
@@ -663,7 +697,7 @@ const pdfjsPlugin: JupyterFrontEndPlugin<IPDFJSTracker> = {
   id: '@jupyterlab/pdfjs-extension:plugin',
   requires: [ILayoutRestorer],
   provides: IPDFJSTracker,
-  autoStart: true
+  autoStart: true,
 };
 
 function activatePDFJS(
@@ -675,17 +709,17 @@ function activatePDFJS(
     name: FACTORY,
     modelName: 'base64',
     fileTypes: FILE_TYPES,
-    readOnly: true
+    readOnly: true,
   });
   const tracker = new WidgetTracker<IDocumentWidget<PDFJSViewer>>({
-    namespace
+    namespace,
   });
 
   // Handle state restoration.
   restorer.restore(tracker, {
     command: 'docmanager:open',
-    args: widget => ({ path: widget.context.path, factory: FACTORY }),
-    name: widget => widget.context.path
+    args: (widget) => ({ path: widget.context.path, factory: FACTORY }),
+    name: (widget) => widget.context.path,
   });
 
   app.docRegistry.addWidgetFactory(factory);
