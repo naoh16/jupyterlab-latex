@@ -52,6 +52,11 @@ import latexIconStr from '../style/latex.svg';
 
 import '../style/index.css';
 
+import { NotebookPanel, INotebookModel } from '@jupyterlab/notebook';
+
+import { ToolbarButton } from '@jupyterlab/apputils';
+import { IDisposable, DisposableDelegate } from '@lumino/disposable';
+
 /**
  * A class that tracks editor widgets.
  */
@@ -384,6 +389,33 @@ function activateLatexPlugin(
     Private.previews.add(texContext.path);
     state.save(id, { paths: Array.from(Private.previews) });
   };
+
+  class EditorButtonExtension
+    implements DocumentRegistry.IWidgetExtension<NotebookPanel, INotebookModel>
+  {
+    createNew(
+      panel: NotebookPanel,
+      context: DocumentRegistry.IContext<INotebookModel>
+    ): IDisposable {
+      const execOpenLataxPreview = () => {
+        commands.execute(CommandIDs.openLatexPreview);
+      };
+      const button = new ToolbarButton({
+        className: 'run-latexPreview-command',
+        label: 'Preview',
+        onClick: execOpenLataxPreview,
+        tooltip: 'Click to preview your LaTeX document',
+      });
+      if (context.path.endsWith('.tex')) {
+        panel.toolbar.insertItem(10, 'Preview', button);
+      }
+      return new DisposableDelegate(() => {
+        button.dispose();
+      });
+    }
+  }
+
+  app.docRegistry.addWidgetExtension('Editor', new EditorButtonExtension());
 
   // If there are any active previews in the statedb,
   // activate them upon initialization.
