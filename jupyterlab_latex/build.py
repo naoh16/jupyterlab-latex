@@ -96,21 +96,22 @@ class LatexBuildHandler(APIHandler):
         # 1 if it is not set or is invalid.
         synctex = self.get_query_argument('synctex', default='1')
         synctex = '1' if synctex != '0' else synctex
+        synctex_flag = f'-synctex={synctex}'
 
-        full_latex_sequence = (
-            c.latex_command,
-            escape_flag,
-            "-interaction=nonstopmode",
-            "-halt-on-error",
-            "-file-line-error",
-            f"-synctex={synctex}",
-            f"{tex_base_name}",
-            )
+        _replacement_table = {
+            '{synctex_flag}': synctex_flag,
+            '{escape_flag}': escape_flag
+        }
+        def _secure_replacement(v):
+            return _replacement_table[v] if v in _replacement_table else v
 
-        full_bibtex_sequence = (
-            c.bib_command,
-            f"{tex_base_name}",
-            )
+        full_latex_sequence = [c.latex_command]
+        full_latex_sequence.extend(list(map(_secure_replacement, c.latex_options)))
+        full_latex_sequence.append(f'{tex_base_name}')
+
+        full_bibtex_sequence = [c.bib_command]
+        full_bibtex_sequence.extend(c.bib_options)
+        full_bibtex_sequence.append(f'{tex_base_name}')
 
         command_sequence = [full_latex_sequence]
 
@@ -122,6 +123,14 @@ class LatexBuildHandler(APIHandler):
                 ]
         else:
             command_sequence = command_sequence * c.run_times
+        
+        if c.dvipdf_command != 'none':
+            full_dvipdf_sequence = [c.dvipdf_command]
+            full_dvipdf_sequence.extend(c.dvipdf_options)
+            full_dvipdf_sequence.append(f"{tex_base_name}")
+
+            command_sequence.append(full_dvipdf_sequence)
+
 
         return command_sequence
 
