@@ -75,19 +75,15 @@ export const MIN_SCALE = 0.25;
  */
 export const MARGIN = 72; // 72 dpi
 
-import * as pdfjsLib from 'pdfjs-dist/webpack.mjs';
-const { PDFViewer, EventBus } = await import('pdfjs-dist/web/pdf_viewer.mjs');
-
 /**
  * A class for rendering a PDF document.
  */
 export class PDFJSViewer extends Widget {
   constructor(context: DocumentRegistry.Context) {
     super({ node: Private.createNode() });
-    this._getDocument = pdfjsLib.getDocument;
-    this._viewer = new PDFViewer({
-      container: this.node as HTMLDivElement,
-      eventBus: new EventBus()
+    this._pdfjsLoaded = Private.ensurePDFJS().then(pdfjsLib => {
+      this._getDocument = pdfjsLib.getDocument;
+      this._viewer = new pdfjsLib.PDFViewer({ container: this.node });
     });
 
     this.context = context;
@@ -198,6 +194,7 @@ export class PDFJSViewer extends Widget {
    * Render PDF into this widget's node.
    */
   private async _render(): Promise<void> {
+    await this._pdfjsLoaded;
     return new Promise<void>(resolve => {
       if (!this._viewer) {
         return;
@@ -399,6 +396,7 @@ export class PDFJSViewer extends Widget {
     this._render();
   }
 
+  private _pdfjsLoaded: Promise<any>;
   private _getDocument: any;
   private _viewer: { [x: string]: any } | undefined;
   private _ready = new PromiseDelegate<void>();
@@ -475,7 +473,7 @@ namespace Private {
   /**
    * Create the node for the PDF widget.
    */
-  export function createNode(): HTMLDivElement {
+  export function createNode(): HTMLElement {
     const node = document.createElement('div');
     node.className = PDF_CONTAINER_CLASS;
     const pdf = document.createElement('div');
@@ -635,5 +633,22 @@ namespace Private {
 
     const blob = new Blob(byteArrays, { type: contentType });
     return blob;
+  }
+
+  export async function ensurePDFJS(): Promise<any> {
+    let lib, viewer;
+    try {
+      lib = await import('pdfjs-dist/build/pdf.min.js' as any);
+      await import('pdfjs-dist/build/pdf.worker.entry' as any);
+      viewer = await import('pdfjs-dist/web/pdf_viewer' as any);
+      await import('pdfjs-dist/web/pdf_viewer.css' as any);
+    } catch (err) {
+      console.error(err);
+    }
+
+    return {
+      ...(({ getDocument }) => ({ getDocument }))(lib),
+      ...(({ PDFViewer }) => ({ PDFViewer }))(viewer)
+    };
   }
 }
